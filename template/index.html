@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQTT Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .status {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .status h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+        
+        .topic-card {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+        
+        .topic-name {
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        
+        .message-log {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .message-log h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            position: sticky;
+            top: 0;
+            background: white;
+            padding-bottom: 10px;
+        }
+        
+        .message {
+            background: #f8f9fa;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            border-left: 3px solid #28a745;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .timestamp {
+            color: #6c757d;
+            font-size: 0.85em;
+            margin-bottom: 5px;
+        }
+        
+        .topic {
+            color: #667eea;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .data {
+            background: white;
+            padding: 10px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            overflow-x: auto;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            color: #6c757d;
+            margin-top: 5px;
+        }
+        
+        .refresh-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            margin: 10px 5px;
+        }
+        
+        .refresh-btn:hover {
+            background: #218838;
+        }
+        
+        .clear-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            margin: 10px 5px;
+        }
+        
+        .clear-btn:hover {
+            background: #c82333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📡 MQTT Real-Time Dashboard</h1>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="totalMessages">0</div>
+                <div class="stat-label">Total Messages</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="activeTopics">0</div>
+                <div class="stat-label">Active Topics</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="lastUpdate">-</div>
+                <div class="stat-label">Last Update</div>
+            </div>
+        </div>
+        
+        <div class="status">
+            <h2>📊 Latest Data by Topic</h2>
+            <div id="latestData">
+                <p style="color: #6c757d;">Waiting for MQTT messages...</p>
+            </div>
+        </div>
+        
+        <div class="message-log">
+            <h2>📝 Message Log</h2>
+            <button class="refresh-btn" onclick="fetchMessages()">🔄 Refresh</button>
+            <button class="clear-btn" onclick="clearLog()">🗑️ Clear</button>
+            <div id="messageLog"></div>
+        </div>
+    </div>
+
+    <script>
+        let messageCount = 0;
+        
+        async function fetchMessages() {
+            try {
+                const response = await fetch('/api/messages');
+                const messages = await response.json();
+                
+                const logDiv = document.getElementById('messageLog');
+                logDiv.innerHTML = '';
+                
+                messageCount = messages.length;
+                document.getElementById('totalMessages').textContent = messageCount;
+                
+                messages.reverse().forEach(msg => {
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = 'message';
+                    msgDiv.innerHTML = `
+                        <div class="timestamp">⏰ ${msg.timestamp}</div>
+                        <div class="topic">📌 ${msg.topic}</div>
+                        <div class="data">${JSON.stringify(msg.data, null, 2)}</div>
+                    `;
+                    logDiv.appendChild(msgDiv);
+                });
+                
+                if (messages.length > 0) {
+                    const lastMsg = messages[messages.length - 1];
+                    document.getElementById('lastUpdate').textContent = 
+                        lastMsg.timestamp.split(' ')[1];
+                }
+            } catch (error) {
+                console.error('Error fetching messages:', error);
+            }
+        }
+        
+        async function fetchLatest() {
+            try {
+                const response = await fetch('/api/latest');
+                const latest = await response.json();
+                
+                const latestDiv = document.getElementById('latestData');
+                
+                if (Object.keys(latest).length === 0) {
+                    latestDiv.innerHTML = '<p style="color: #6c757d;">Waiting for MQTT messages...</p>';
+                    document.getElementById('activeTopics').textContent = '0';
+                    return;
+                }
+                
+                document.getElementById('activeTopics').textContent = Object.keys(latest).length;
+                
+                latestDiv.innerHTML = '';
+                for (const [topic, msg] of Object.entries(latest)) {
+                    const card = document.createElement('div');
+                    card.className = 'topic-card';
+                    card.innerHTML = `
+                        <div class="topic-name">${topic}</div>
+                        <div style="font-size: 0.85em; color: #6c757d; margin-bottom: 8px;">
+                            ${msg.timestamp}
+                        </div>
+                        <div class="data">${JSON.stringify(msg.data, null, 2)}</div>
+                    `;
+                    latestDiv.appendChild(card);
+                }
+            } catch (error) {
+                console.error('Error fetching latest:', error);
+            }
+        }
+        
+        function clearLog() {
+            document.getElementById('messageLog').innerHTML = 
+                '<p style="color: #6c757d; padding: 20px;">Log cleared. New messages will appear here.</p>';
+        }
+        
+        // Auto-refresh every 30 seconds
+        setInterval(() => {
+            fetchMessages();
+            fetchLatest();
+        }, 30000);
+        
+        // Initial load
+        fetchMessages();
+        fetchLatest();
+    </script>
+</body>
+</html>
